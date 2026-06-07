@@ -1,0 +1,103 @@
+databases:
+  - name: skyvision-postgres
+    databaseName: skyvision
+    user: skyvision
+    plan: basic-256mb
+
+services:
+  - type: keyvalue
+    name: skyvision-redis
+    plan: starter
+    ipAllowList: []
+
+  - type: web
+    name: skyvision-api
+    runtime: docker
+    plan: starter
+    healthCheckPath: /api/health
+    dockerCommand: uvicorn skyvision.main:app --host 0.0.0.0 --port $PORT
+    preDeployCommand: alembic upgrade head
+    envVars:
+      - key: SKYVISION_ENV
+        value: production
+      - key: SKYVISION_LOG_LEVEL
+        value: INFO
+      - key: DATABASE_URL
+        fromDatabase:
+          name: skyvision-postgres
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: skyvision-redis
+          property: connectionString
+      - key: SKYVISION_ALERT_SCORE_THRESHOLD
+        value: "80"
+      - key: SKYVISION_SYMBOLS
+        sync: false
+      - key: SKYVISION_POLYGON_API_KEY
+        sync: false
+      - key: SKYVISION_TRADIER_API_KEY
+        sync: false
+      - key: SKYVISION_THETADATA_USERNAME
+        sync: false
+      - key: SKYVISION_THETADATA_PASSWORD
+        sync: false
+      - key: SKYVISION_DISCORD_BOT_TOKEN
+        sync: false
+      - key: SKYVISION_DISCORD_CHANNEL_ID
+        sync: false
+
+  - type: worker
+    name: skyvision-scanner
+    runtime: docker
+    plan: starter
+    dockerCommand: python -m skyvision.workers.realtime
+    envVars:
+      - key: SKYVISION_ENV
+        value: production
+      - key: SKYVISION_LOG_LEVEL
+        value: INFO
+      - key: DATABASE_URL
+        fromDatabase:
+          name: skyvision-postgres
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: skyvision-redis
+          property: connectionString
+      - key: SKYVISION_SYMBOLS
+        sync: false
+      - key: SKYVISION_POLYGON_API_KEY
+        sync: false
+      - key: SKYVISION_TRADIER_API_KEY
+        sync: false
+      - key: SKYVISION_THETADATA_USERNAME
+        sync: false
+      - key: SKYVISION_THETADATA_PASSWORD
+        sync: false
+
+  - type: worker
+    name: skyvision-discord
+    runtime: docker
+    plan: starter
+    dockerCommand: python -m skyvision.workers.discord_bot
+    envVars:
+      - key: SKYVISION_ENV
+        value: production
+      - key: SKYVISION_LOG_LEVEL
+        value: INFO
+      - key: DATABASE_URL
+        fromDatabase:
+          name: skyvision-postgres
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: skyvision-redis
+          property: connectionString
+      - key: SKYVISION_DISCORD_BOT_TOKEN
+        sync: false
+      - key: SKYVISION_DISCORD_CHANNEL_ID
+        sync: false
